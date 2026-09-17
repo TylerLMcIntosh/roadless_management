@@ -33,6 +33,12 @@ treatment_type_list <- c("Hand Pile Burn",
                          "Lop and Scatter",
                          "Mastication/Mowing")
 
+twig_test <- sf::st_read(
+  twig_path,
+  query = "SELECT * FROM treatment_index LIMIT 5",
+  quiet = TRUE
+)
+
 twig <- sf::st_read(twig_path,
                     layer = "treatment_index")
 
