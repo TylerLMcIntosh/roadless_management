@@ -10,83 +10,126 @@ library(mapview)
 dir_dats <- here("data/raw")
 dir_derived <- here("data/derived")
 
-st_layers(here(dir_dats, "S_USA.RoadCore_FS/S_USA.RoadCore_FS.shp"))
+twig_filt_fl <- here(dir_derived, "twig_filt_poly.gpkg")
+twig_filt_centr_fl <- here(dir_derived, "twig_filt_centroids.gpkg")
+mngmt_natl_fl <- here(dir_derived, "roadless_management_national_simplified.gpkg")
 
-# USFS roads and roadless
-roadless_path <- here(dir_dats, "S_USA.RoadlessArea_2001/S_USA.RoadlessArea_2001.shp")
+twig_pts_mng_add_fl <- here(dir_derived, "twig_points_management_added.gpkg")
+state_perc_trt_res <- here(dir_derived, "state_perc_treated_results.csv")
+state_perc_trt_res_disag <- here(dir_derived, "state_perc_treated_results_disag.csv")
 
-roadless_crs <- st_read(
-  roadless_path) |>
-  st_crs()
+# Load and/or prep data ----
 
-fs_road_file <- here(dir_dats, "S_USA.RoadCore_FS/S_USA.RoadCore_FS.shp")
-#confirmed - fs road file is same CRS as roadless data
+# twig data
+if(!file.exists(twig_filt_fl) | !file.exists(twig_filt_centr_fl)) {
+  
+  # Twig
+  twig_path <- here(dir_dats, "treatment_index.gdb")
+  twig_crs <- st_read(
+    twig_path,
+    query = "SELECT * FROM treatment_index LIMIT 0"
+  ) |>
+    st_crs()
+  
+  treatment_type_list <- c("Hand Pile Burn",
+                           "Machine Pile Burn",
+                           "Broadcast Burn",
+                           #"Fire Use", FIRE USE REMOVED
+                           "Jackpot Burn",
+                           "Thinning",
+                           "Crushing",
+                           "Mowing",
+                           "Mastication",
+                           "Biomass Removal",
+                           "Machine Pile",
+                           "Chipping",
+                           "Hand Pile",
+                           "Preparation",
+                           "Lop and Scatter",
+                           "Mastication/Mowing")
+  
+  twig <- sf::st_read(twig_path,
+                      layer = "treatment_index")
+  
+  # filter twig
+  dup_cols <- c('name', 'treatment_date', 'twig_category', 'acres')
+  twig_filt_ids <- twig |>
+    sf::st_drop_geometry() |>
+    dplyr::mutate(treatment_year = lubridate::year(actual_completion_date)) |>
+    dplyr::filter(treatment_year %in% seq(2001, 2026)) %>%
+    mutate(across(everything(), ~ ifelse(. %in% c('', ' ', 'N/A', 'NA', 'Not Applicable'), NA, .))) %>%
+    filter(date_source %in% c('date_completed', 'act_comp_dt')) %>%   # needs to be either 'date_completed' or 'act_comp_dt' (different source codes for completion)
+    distinct(unique_id, .keep_all = T) %>%
+    filter(error %in% c(NA, 'DUPLICATE-KEEP')) %>%  #drop duplicates and high cost errors
+    distinct(across(all_of(dup_cols)), .keep_all = T) %>%
+    mutate(treatment_date = as.POSIXct(actual_completion_date, tz = 'UTC')) %>% # converted back to epoch time for some reason
+    mutate(across(c(date_current, actual_completion_date), function(x) as.POSIXct(x, tz = 'UTC'))) %>%
+    filter(treatment_date < as.Date("2026-01-01")) |>
+    pull(unique_id)
+  
+  twig_filt <- twig |>
+    filter(unique_id %in% twig_filt_ids & type %in% treatment_type_list) |>
+    dplyr::mutate(treatment_year = lubridate::year(actual_completion_date))
+  
+  # centroids for distance calculations
+  twig_filt_centroids <- twig_filt |>
+    sf::st_centroid(of_largest_polygon = TRUE)
+  
+  sf::st_write(twig_filt, here(dir_derived, "twig_filt_poly.gpkg"))
+  sf::st_write(twig_filt_centroids, here(dir_derived, "twig_filt_centroids.gpkg"))
+} else {
+  twig_filt <- sf::st_read(twig_filt_fl)
+  twig_filt_centroids <- sf::st_read(twig_filt_centr_fl)
+}
 
+# national management data
+if(!file.exists(mngmt_natl_fl)) {
+  st_layers(here(dir_dats, "S_USA.RoadCore_FS/S_USA.RoadCore_FS.shp"))
+  
+  # USFS roads and roadless
+  roadless_path <- here(dir_dats, "S_USA.RoadlessArea_2001/S_USA.RoadlessArea_2001.shp")
+  
+  roadless_crs <- st_read(
+    roadless_path) |>
+    st_crs()
+  
+  
+  # USFS all
+  sma_fl <- here(dir_dats, "SMA_WM.gdb")
+  st_layers(sma_fl)
+  sma_crs <- st_read(
+    here(sma_fl),
+    query = "SELECT * FROM SurfaceMgtAgy_USFS LIMIT 0"
+  ) |>
+    st_crs()
+  
+  usfs <- st_read(
+    here(sma_fl),
+    layer = "SurfaceMgtAgy_USFS") |>
+    st_transform(twig_crs)
+  
+  
+  # prep management national data
+  usfs_dissolved <- usfs |> sf::st_union()
+  
+  roadless_all <- sf::st_read(roadless_path) |>
+    sf::st_transform(twig_crs) |>
+    sf::st_union()
+  
+  usfs_nonroadless_all <- sf::st_difference(usfs_dissolved, roadless_all)
+  
+  management_national <- rbind(
+    sf::st_sf(management = "roadless", geometry = roadless_all),
+    sf::st_sf(management = "usfs non-roadless", geometry = usfs_nonroadless_all)
+  )
+  
+  sf::st_write(management_national, here(dir_derived, "roadless_management_national_simplified.gpkg"))
+  
+} else {
+  management_national <- sf::st_read(mngmt_natl_fl)
+}
 
-# USFS all
-sma_fl <- here(dir_dats, "SMA_WM.gdb")
-st_layers(sma_fl)
-sma_crs <- st_read(
-  here(sma_fl),
-  query = "SELECT * FROM SurfaceMgtAgy_USFS LIMIT 0"
-) |>
-  st_crs()
-
-
-
-
-# Twig
-twig_path <- here(dir_dats, "treatment_index.gdb")
-twig_crs <- st_read(
-  twig_path,
-  query = "SELECT * FROM treatment_index LIMIT 0"
-) |>
-  st_crs()
-
-treatment_type_list <- c("Hand Pile Burn",
-                         "Machine Pile Burn",
-                         "Broadcast Burn",
-                         #"Fire Use", FIRE USE REMOVED
-                         "Jackpot Burn",
-                         "Thinning",
-                         "Crushing",
-                         "Mowing",
-                         "Mastication",
-                         "Biomass Removal",
-                         "Machine Pile",
-                         "Chipping",
-                         "Hand Pile",
-                         "Preparation",
-                         "Lop and Scatter",
-                         "Mastication/Mowing")
-
-twig <- sf::st_read(twig_path,
-                    layer = "treatment_index")
-
-# filter twig
-dup_cols <- c('name', 'treatment_date', 'twig_category', 'acres')
-twig_filt_ids <- twig |>
-  sf::st_drop_geometry() |>
-  dplyr::mutate(treatment_year = lubridate::year(actual_completion_date)) |>
-  dplyr::filter(treatment_year %in% seq(2001, 2026)) %>%
-  mutate(across(everything(), ~ ifelse(. %in% c('', ' ', 'N/A', 'NA', 'Not Applicable'), NA, .))) %>%
-  filter(date_source %in% c('date_completed', 'act_comp_dt')) %>%   # needs to be either 'date_completed' or 'act_comp_dt' (different source codes for completion)
-  distinct(unique_id, .keep_all = T) %>%
-  filter(error %in% c(NA, 'DUPLICATE-KEEP')) %>%  #drop duplicates and high cost errors
-  distinct(across(all_of(dup_cols)), .keep_all = T) %>%
-  mutate(treatment_date = as.POSIXct(actual_completion_date, tz = 'UTC')) %>% # converted back to epoch time for some reason
-  mutate(across(c(date_current, actual_completion_date), function(x) as.POSIXct(x, tz = 'UTC'))) %>%
-  filter(treatment_date < as.Date("2026-01-01")) |>
-  pull(unique_id)
-
-twig_filt <- twig |>
-  filter(unique_id %in% twig_filt_ids & type %in% treatment_type_list) |>
-  dplyr::mutate(treatment_year = lubridate::year(actual_completion_date))
-
-# centroids for distance calculations
-twig_filt_centroids <- twig_filt |>
-  sf::st_centroid(of_largest_polygon = TRUE)
-
+twig_crs <- sf::st_crs(twig_filt)
 
 # States
 states <- tigris::states() |>
@@ -98,29 +141,7 @@ counties <- tigris::counties() |>
   st_transform(twig_crs)
 
 
-usfs <- st_read(
-  here(sma_fl),
-  layer = "SurfaceMgtAgy_USFS") |>
-  st_transform(twig_crs)
-
-
-# prep management national data
-usfs_dissolved <- usfs |> sf::st_union()
-
-roadless_all <- sf::st_read(roadless_path) |>
-  sf::st_transform(twig_crs) |>
-  sf::st_union()
-
-usfs_nonroadless_all <- sf::st_difference(usfs_dissolved, roadless_all)
-
-management_national <- rbind(
-  sf::st_sf(management = "roadless", geometry = roadless_all),
-  sf::st_sf(management = "usfs non-roadless", geometry = usfs_nonroadless_all)
-)
-
-
-sf::st_write(management_national, here(dir_derived, "roadless_management_national_simplified.gpkg"))
-
+# Roadless analysis #1 ----
 
 # X acres treated in each state, making up X% of the fuel treatment accomplished within each state
 
@@ -130,10 +151,10 @@ roadless_analysis_1 <- function(state) {
     filter(STUSPS == state) |>
     sf::st_transform(twig_crs)
   
-  # aoi_bbox_roadless <- geo_state |>
-  #   st_transform(roadless_crs) |>
-  #   st_geometry() |>
-  #   st_as_text()
+  aoi_bbox_roadless <- geo_state |>
+    st_transform(roadless_crs) |>
+    st_geometry() |>
+    st_as_text()
   
   # twig_state_filt <- twig_filt |>
   #   st_filter(geo_state) |>
@@ -224,57 +245,68 @@ roadless_analysis_1 <- function(state) {
   # }
 }
 
-all_results <- states$STUSPS |>
-  purrr::set_names() |>
-  purrr::map(.f = roadless_analysis_1)
 
-all_results_bound <- all_results |>
-  purrr::list_transpose() |>
-  purrr::map(dplyr::bind_rows)
-
-view(all_results_bound$state_summary)
-
-all_results_summed <- all_results_bound$state_summary |>
-  dplyr::group_by(state, management) |>
-  dplyr::summarise(reported_acres = sum(reported_acres, na.rm = TRUE),
-                   reported_cost = sum(reported_cost, na.rm = TRUE),
-                   n_trt = sum(n_trt),
-                   n_trt_w_acres = sum(n_trt_w_acres),
-                   n_trt_w_cost = sum(n_trt_w_cost)) |>
-  dplyr::left_join(all_results_bound$management_area)
-
-all_results_summed <- all_results_summed |>
-  dplyr::mutate((reported_acres / area_acres) * 100)
-
-
-
-roadless_analysis_2 <- function() {
+if(!file.exists(twig_pts_mng_add_fl) | !file.exists(state_perc_trt_res)) {
   
-  # ADD STUFF AT THE BEGINNING TO MAKE WORK
+  all_results <- states$STUSPS |>
+    purrr::set_names() |>
+    purrr::map(.f = roadless_analysis_1)
   
-  # deal with roads
-  fs_roads_state <- st_read(fs_road_file,
-                            wkt_filter = aoi_bbox_roadless) |>
-    st_transform(twig_crs) |>
-    st_intersection(geo_state) |>
-    filter(ROUTE_STAT == "EX - EXISTING")
+  all_results_bound <- all_results |>
+    purrr::list_transpose() |>
+    purrr::map(dplyr::bind_rows)
   
-  counties_state_list <- counties |>
-    filter(STATEFP == geo_state$STATEFP) |>
-    sf::st_filter(sma_state) |>
-    pull(NAME)
+  view(all_results_bound$state_summary)
   
-  mtfcc_drop <- c("S1710", "S1720", "S1820", "S1830") #walkways, stairways, bike paths, bridle paths, etc - things you can't take a vehicle down
+  all_results_disag <- all_results_bound$state_summary |>
+    filter(state != "ID" & state != "CO")
   
-  tiger_roads_state <- tigris::roads(state, county = counties_state_list, year = 2024) |>
-    st_transform(twig_crs) |>
-    filter(! MTFCC %in% mtfcc_drop) |>
-    sf::st_filter(sma_state) |>
-    sf::st_intersection(sma_state)
+  all_results_summed <- all_results_disag |>
+    dplyr::group_by(state, management) |>
+    dplyr::summarise(reported_acres = sum(reported_acres, na.rm = TRUE),
+                     reported_cost = sum(reported_cost, na.rm = TRUE),
+                     n_trt = sum(n_trt),
+                     n_trt_w_acres = sum(n_trt_w_acres),
+                     n_trt_w_cost = sum(n_trt_w_cost)) |>
+    dplyr::left_join(all_results_bound$management_area)
+  
+  all_results_summed <- all_results_summed |>
+    dplyr::mutate(perc_treated = (reported_acres / area_acres) * 100) |>
+    sf::st_drop_geometry()
+  
+  write_csv(all_results_disag, here(dir_derived, "state_perc_treated_results_disag.csv"))
+  write_csv(all_results_summed, here(dir_derived, "state_perc_treated_results.csv"))
+  
+  twig_points_with_management <- all_results_bound$point_data |>
+    dplyr::rename(ST_NAME = NAME)
+  sf::st_write(twig_points_with_management, here(dir_derived, "twig_points_management_added.gpkg"))
+  
+} else {
+  twig_points_with_management <- sf::st_read(twig_pts_mng_add_fl)
+  all_results_summed <- sf::st_read(state_perc_trt_res)
+  all_results_disag <- sf::st_read(state_perc_trt_res_disag)
+}
+
+
+ggplot(all_results_summed) +
+  geom_col(aes(x = state, y = perc_treated, fill = management), position = "dodge")
+
+
+
+
+# Roadless analysis #2: dist to roads ----
+
+
+
+
+
+
+distances_from_roads <- function(state) {
   
   twig_filt_centroids_state <- twig_filt_centroids |>
     st_filter(geo_state) 
   
+  roads_all_state <- sf::st_read(paste0(state, "_usfs_roads.gpkg"))
   
   # get nearest feature for both sets; keep closest distance
   roads_all_state <- rbind(sf::st_geometry(fs_roads_state),
@@ -423,88 +455,55 @@ roadless_analysis_2 <- function() {
 
 
 ##
-# 
-# state <- "MD"
-# 
-# 
-# geo_state <- states |>
-#   filter(STUSPS == state) |>
-#   sf::st_transform(twig_crs)
-# 
-# # load each dataset clipped to just the state extent, then clip each to the actual state polygon
-# 
-# aoi_bbox_roadless <- geo_state |>
-#   st_transform(roadless_crs) |>
-#   st_geometry() |>
-#   st_as_text()
-# 
-# 
-# twig_state_filt <- twig_filt |>
-#   st_filter(geo_state) |>
-#   st_intersection(geo_state)
-# 
-# sma_state <- usfs |>
-#   st_filter(geo_state) |>
-#   st_intersection(geo_state) |>
-#   st_union() #|>
-
-
 
 state <- "WY"
 
 
+dir_roads <- here(dir_derived, "roads")
+dir.create(dir_roads, showWarnings = FALSE)
+
 geo_state <- states |>
   filter(STUSPS == state) |>
-  sf::st_transform(twig_crs)
+  sf::st_transform(tiger_crs)
 
-aoi_bbox_roadless <- geo_state |>
-  st_transform(roadless_crs) |>
-  st_geometry() |>
-  st_as_text()
+sf::sf_use_s2(FALSE)
 
-twig_state_filt <- twig_filt |>
-  st_filter(geo_state) |>
-  st_intersection(geo_state)
+# state management
+management_state <- management_national |>
+  sf::st_transform(tiger_crs) |>
+  sf::st_intersection(geo_state)
 
-sma_state <- usfs |>
-  st_filter(geo_state) |>
-  st_intersection(geo_state) |>
-  st_union()
+# tiger
+print("Tiger ops")
+counties_state_list <- counties |>
+  filter(STATEFP == geo_state$STATEFP) |>
+  sf::st_transform(tiger_crs) |>
+  sf::st_filter(management_state) |>
+  pull(NAME)
 
-roadless_state <- st_read(roadless_path,
+mtfcc_drop <- c("S1710", "S1720", "S1820", "S1830") #walkways, stairways, bike paths, bridle paths, etc - things you can't take a vehicle down
+
+tiger_roads_state <- tigris::roads(state, county = counties_state_list, year = 2024) |>
+  filter(! MTFCC %in% mtfcc_drop) |>
+  sf::st_filter(management_state)
+
+# FS roads
+fs_roads_state <- st_read(fs_road_file,
                           wkt_filter = aoi_bbox_roadless) |>
-  st_transform(twig_crs) |>
-  st_intersection(geo_state)
+  st_transform(tiger_crs) |>
+  st_filter(geo_state) |>
+  filter(ROUTE_STAT == "EX - EXISTING")
 
+sf::sf_use_s2(TRUE)
 
-# only perform for states with roadless areas
-#if(nrow(roadless_state) > 0) {
-  
-  #management data
-  roadless_state <- roadless_state |>
-    st_union()
-  
-  usfs_nonroadless_geom <- st_difference(sma_state, roadless_state)
-  
-  management_state <- rbind(
-    st_sf(operating_state = state, management = "roadless", geometry = roadless_state),
-    st_sf(operating_state = state, management = "usfs non-roadless", geometry = usfs_nonroadless_geom)
-  )
-  
-  # spatial join
-  twig_state_joined <- twig_state_filt |>
-    sf::st_join(management_state, largest = TRUE) |>
-    filter(!is.na(management))
-  
-  # summarize
-  state_summary <- twig_state_joined |>
-    dplyr::group_by(type, treatment_year, operating_state, management) |>
-    dplyr::summarise(reported_acres = sum(acres, na.rm = TRUE),
-                     reported_cost = sum(total_cost, na.rm = TRUE),
-                     n_trt = n(),
-                     n_trt_w_acres = sum(!is.na(acres)),
-                     n_trt_w_cost = sum(!is.na(total_cost)),
-                     .groups = "drop")
+# Merge roads
+print(glue("All roads pulled for {state}; binding and writing")) 
 
-  
-    
+roads_usfs_all_state <- rbind(sf::st_geometry(fs_roads_state),
+                         sf::st_geometry(tiger_roads_state)) |>
+  sf::st_sf() |>
+  sf::st_transform(5070)
+
+flnm <- paste0(state, "_usfs_roads.gpkg")
+sf::st_write(roads_usfs_all_state, here(dir_roads, flnm))
+return(flnm)
