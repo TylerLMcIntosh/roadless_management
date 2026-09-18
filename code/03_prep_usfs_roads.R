@@ -119,10 +119,23 @@ states <- tigris::states() |>
 counties <- tigris::counties()
 
 fs_road_file <- here(dir_dats, "S_USA.RoadCore_FS/S_USA.RoadCore_FS.shp")
-#confirmed - fs road file is same CRS as roadless data
+fs_road_crs <- sf::st_read(
+  fs_road_file,
+  query = "SELECT * FROM \"S_USA.RoadCore_FS\" LIMIT 0",
+  quiet = TRUE
+) |>
+  sf::st_crs()
+
+
+st_crs(fs_road_file)
 
 tiger_crs <- tigris::roads(state = "WY", county = "Teton", year = 2024) |>
   sf::st_crs()
+
+
+management_national_tiger <- management_national |>
+  sf::st_transform(tiger_crs)
+
 
 
 pull_relevant_state_roads <- function(state) {
@@ -140,8 +153,8 @@ pull_relevant_state_roads <- function(state) {
   sf::sf_use_s2(FALSE)
   
   # state management
-  management_state <- management_national |>
-    sf::st_transform(tiger_crs) |>
+  management_state <- management_national_tiger |>
+    sf::st_filter(geo_state) |>
     sf::st_intersection(geo_state)
   
   if(nrow(management_state) > 0 ) {
@@ -166,10 +179,26 @@ pull_relevant_state_roads <- function(state) {
       sf::st_transform(5070)
     
     # FS roads
-    fs_roads_state <- st_read(fs_road_file) |>
-      st_transform(tiger_crs) |>
-      st_filter(geo_state) |>
-      filter(ROUTE_STAT == "EX - EXISTING")
+    
+    aoi_bbox <- geo_state |>
+      sf::st_transform(fs_rodd_crs) |>
+      sf::st_bbox() |>
+      sf::st_as_sfc() |>
+      sf::st_as_text()
+    
+    fs_roads_state <- sf::st_read(
+      fs_road_file,
+      wkt_filter = aoi_bbox,
+      quiet = TRUE
+    ) |>
+      sf::st_transform(tiger_crs) |>
+      sf::st_filter(geo_state) |>
+      dplyr::filter(ROUTE_STAT == "EX - EXISTING")
+    
+    # fs_roads_state <- st_read(fs_road_file) |>
+    #   st_transform(tiger_crs) |>
+    #   st_filter(geo_state) |>
+    #   filter(ROUTE_STAT == "EX - EXISTING")
     
     fs_roads_state_5070 <- fs_roads_state |>
       sf::st_transform(5070)
@@ -195,8 +224,8 @@ pull_relevant_state_roads <- function(state) {
   }
 }
 
-#road_files <- c("WY") |>
-road_files <- states$STUSPS |>
+road_files <- c("WY") |>
+#road_files <- states$STUSPS |>
   purrr::set_names() |>
   purrr::map(.f = pull_relevant_state_roads)
 

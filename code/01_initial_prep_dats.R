@@ -111,7 +111,8 @@ management_national <- rbind(
   sf::st_sf(management = "roadless", geometry = roadless_all),
   sf::st_sf(management = "usfs non-roadless", geometry = usfs_nonroadless_all)
 ) |>
-  sf::st_transform(5070)
+  sf::st_transform(5070) |>
+  sf::st_make_valid()
 
 sf::st_write(management_national, here(dir_derived, "roadless_management_national_simplified_5070.gpkg"))
 
