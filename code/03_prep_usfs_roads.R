@@ -162,7 +162,6 @@ pull_relevant_state_roads <- function(state) {
     print("Tiger ops")
     counties_state_list <- counties |>
       filter(STATEFP == geo_state$STATEFP) |>
-      sf::st_transform(tiger_crs) |>
       sf::st_filter(management_state) |>
       pull(COUNTYFP)
     
@@ -185,12 +184,12 @@ pull_relevant_state_roads <- function(state) {
       sf::st_as_sfc() |>
       sf::st_as_text()
     
-    fs_roads_state <- sf::st_read(
+    fs_roads_state_5070 <- sf::st_read(
       fs_road_file,
       wkt_filter = aoi_bbox,
       quiet = TRUE
     ) |>
-      sf::st_transform(tiger_crs) |>
+      sf::st_transform(5070) |>
       sf::st_filter(geo_state) |>
       dplyr::filter(ROUTE_STAT == "EX - EXISTING")
     
@@ -199,18 +198,13 @@ pull_relevant_state_roads <- function(state) {
     #   st_filter(geo_state) |>
     #   filter(ROUTE_STAT == "EX - EXISTING")
     
-    fs_roads_state_5070 <- fs_roads_state |>
-      sf::st_transform(5070)
     
     # Merge roads
     print(glue("All roads pulled for {state}; binding and writing")) 
     
-    geo_state_5070 <- geo_state |>
-      sf::st_transform(5070)
-    
     roads_all_state <- rbind(fs_roads_state_5070 |> select(geometry),
                              tiger_roads_state_5070 |> select(geometry)) |>
-      sf::st_intersection(geo_state_5070)
+      sf::st_intersection(geo_state)
     
     flnm <- paste0(state, "_allusfs_roads_5070.gpkg")
     sf::st_write(roads_all_state, here(dir_roads, flnm), append = FALSE)
