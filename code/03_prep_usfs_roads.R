@@ -126,9 +126,6 @@ fs_road_crs <- sf::st_read(
 ) |>
   sf::st_crs()
 
-
-st_crs(fs_road_file)
-
 tiger_crs <- tigris::roads(state = "WY", county = "Teton", year = 2024) |>
   sf::st_crs()
 
