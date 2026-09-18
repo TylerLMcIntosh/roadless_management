@@ -211,9 +211,9 @@ pull_relevant_state_roads <- function(state) {
       sf::st_intersection(geo_state_5070)
     
     flnm <- paste0(state, "_allusfs_roads_5070.gpkg")
-    sf::st_write(roads_all_state, here(dir_roads, flnm))
-    sf::st_write(tiger_roads_state_5070, here(dir_roads, paste0(state, "_tiger_only_roads_5070.gpkg")))
-    sf::st_write(fs_roads_state_5070, here(dir_roads, paste0(state, "_fs_only_roads_5070.gpkg")))
+    sf::st_write(roads_all_state, here(dir_roads, flnm), append = FALSE)
+    sf::st_write(tiger_roads_state_5070, here(dir_roads, paste0(state, "_tiger_only_roads_5070.gpkg")), append = FALSE)
+    sf::st_write(fs_roads_state_5070, here(dir_roads, paste0(state, "_fs_only_roads_5070.gpkg")), append = FALSE)
     
     return(flnm)
   } else {
