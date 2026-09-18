@@ -178,7 +178,7 @@ pull_relevant_state_roads <- function(state) {
     # FS roads
     
     aoi_bbox <- geo_state |>
-      sf::st_transform(fs_rodd_crs) |>
+      sf::st_transform(fs_road_crs) |>
       sf::st_bbox() |>
       sf::st_as_sfc() |>
       sf::st_as_text()
