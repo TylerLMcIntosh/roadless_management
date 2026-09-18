@@ -116,7 +116,8 @@ states <- tigris::states() |>
   filter(! STUSPS %in% c("CO", "ID")) #remove CO and ID
 
 # counties - for pulling TIGRIS road data
-counties <- tigris::counties()
+counties <- tigris::counties() |>
+  sf::st_transform(5070)
 
 fs_road_file <- here(dir_dats, "S_USA.RoadCore_FS/S_USA.RoadCore_FS.shp")
 fs_road_crs <- sf::st_read(
