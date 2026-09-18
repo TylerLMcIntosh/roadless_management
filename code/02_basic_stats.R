@@ -6,7 +6,8 @@ library(sf)
 library(tidyverse)
 library(here)
 library(mapview)
-
+library(furrr)
+library(future)
 
 dir_dats <- here("data/raw")
 dir_derived <- here("data/derived")
@@ -81,12 +82,25 @@ roadless_analysis_1 <- function(state) {
   }
 }
 
+# Run analysis
+# all_results <- states$STUSPS |>
+#   purrr::set_names() |>
+#   purrr::map(.f = roadless_analysis_1)
 
+future::plan(future::multisession, workers = 16)
 
 all_results <- states$STUSPS |>
   purrr::set_names() |>
-  purrr::map(.f = roadless_analysis_1)
+  furrr::future_map(
+    .f = roadless_analysis_1,
+    .options = furrr::furrr_options(
+      packages = c("sf", "dplyr", "units", "tibble")
+    )
+  )
 
+future::plan(future::sequential)
+
+#manage
 all_results_bound <- all_results |>
   purrr::list_transpose() |>
   purrr::map(dplyr::bind_rows)
