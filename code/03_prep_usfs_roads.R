@@ -162,7 +162,7 @@ pull_relevant_state_roads <- function(state) {
       filter(STATEFP == geo_state$STATEFP) |>
       sf::st_transform(tiger_crs) |>
       sf::st_filter(management_state) |>
-      pull(NAME)
+      pull(COUNTYFP)
     
     mtfcc_drop <- c("S1710", "S1720", "S1820", "S1830") #walkways, stairways, bike paths, bridle paths, etc - things you can't take a vehicle down
     
@@ -304,3 +304,6 @@ future::plan(future::sequential)
 # return(flnm)
 # 
 
+
+
+tiger_roads_state <- tigris::roads(state = c(31), county = c(039), year = 2024)
