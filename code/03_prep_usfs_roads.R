@@ -130,9 +130,8 @@ tiger_crs <- tigris::roads(state = "WY", county = "Teton", year = 2024) |>
   sf::st_crs()
 
 
-management_national_tiger <- management_national |>
-  sf::st_transform(tiger_crs)
-
+# management_national_tiger <- management_national |>
+#   sf::st_transform(tiger_crs)
 
 
 pull_relevant_state_roads <- function(state) {
@@ -145,14 +144,17 @@ pull_relevant_state_roads <- function(state) {
   
   geo_state <- states |>
     dplyr::filter(STUSPS == state) |>
-    sf::st_transform(tiger_crs)
+    sf::st_transform(5070)
+  
+  management_state <- management_national |>
+    sf::st_filter(geo_state) |>
+    sf::st_intersection(geo_state)
   
   sf::sf_use_s2(FALSE)
   
   # state management
-  management_state <- management_national_tiger |>
-    sf::st_filter(geo_state) |>
-    sf::st_intersection(geo_state)
+  management_state_tiger <- management_state |>
+    sf::st_transform(tiger_crs)
   
   if(nrow(management_state) > 0 ) {
       
@@ -168,7 +170,7 @@ pull_relevant_state_roads <- function(state) {
     
     tiger_roads_state <- tigris::roads(state, county = counties_state_list, year = 2024) |>
       filter(! MTFCC %in% mtfcc_drop) |>
-      sf::st_filter(management_state)
+      sf::st_filter(management_state_tiger)
     
     sf::sf_use_s2(TRUE)
     
