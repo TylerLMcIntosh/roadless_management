@@ -38,6 +38,7 @@ twig_test <- sf::st_read(
   query = "SELECT * FROM treatment_index LIMIT 5",
   quiet = TRUE
 )
+names(twig_test)
 
 twig <- sf::st_read(twig_path,
                     layer = "treatment_index")

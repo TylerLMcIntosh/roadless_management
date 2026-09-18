@@ -4,6 +4,7 @@ library(sf)
 library(tidyverse)
 library(here)
 library(mapview)
+library(glue)
 
 
 dir_dats <- here("data/raw")
@@ -106,7 +107,7 @@ dir_derived <- here("data/derived")
 
 # Operate on road data ----
 
-mngmt_natl_fl <- here(dir_derived, "roadless_management_national_simplified.gpkg")
+mngmt_natl_fl <- here(dir_derived, "roadless_management_national_simplified_5070.gpkg")
 
 management_national <- sf::st_read(mngmt_natl_fl)
 
@@ -143,48 +144,55 @@ pull_relevant_state_roads <- function(state) {
     sf::st_transform(tiger_crs) |>
     sf::st_intersection(geo_state)
   
-  # tiger
-  print("Tiger ops")
-  counties_state_list <- counties |>
-    filter(STATEFP == geo_state$STATEFP) |>
-    sf::st_transform(tiger_crs) |>
-    sf::st_filter(management_state) |>
-    pull(NAME)
-  
-  mtfcc_drop <- c("S1710", "S1720", "S1820", "S1830") #walkways, stairways, bike paths, bridle paths, etc - things you can't take a vehicle down
-  
-  tiger_roads_state <- tigris::roads(state, county = counties_state_list, year = 2024) |>
-    filter(! MTFCC %in% mtfcc_drop) |>
-    sf::st_filter(management_state)
-  
-  tiger_roads_state_5070 <- tiger_roads_state |>
-    sf::st_transform(5070)
-  
-  # FS roads
-  fs_roads_state <- st_read(fs_road_file) |>
-    st_transform(tiger_crs) |>
-    st_filter(geo_state) |>
-    filter(ROUTE_STAT == "EX - EXISTING")
-  
-  fs_roads_state_5070 <- fs_roads_state |>
-    sf::st_transform(5070)
-  
-  # Merge roads
-  print(glue("All roads pulled for {state}; binding and writing")) 
-  
-  geo_state_5070 <- geo_state |>
-    sf::st_transform(5070)
-  
-  roads_all_state <- rbind(fs_roads_state_5070 |> select(geometry),
-                           tiger_roads_state_5070 |> select(geometry)) |>
-    sf::st_intersection(geo_state_5070)
-  
-  flnm <- paste0(state, "_allusfs_roads_5070.gpkg")
-  sf::st_write(roads_all_state, here(dir_roads, flnm))
-  sf::st_write(tiger_roads_state_5070, here(dir_roads, paste0(state, "_fs_only_roads_5070.gpkg")))
-  sf::st_write(fs_roads_state_5070, here(dir_roads, paste0(state, "_tiger_only_roads_5070.gpkg")))
-  
-  return(flnm)
+  if(nrow(management_state) > 0 ) {
+      
+    # tiger
+    print("Tiger ops")
+    counties_state_list <- counties |>
+      filter(STATEFP == geo_state$STATEFP) |>
+      sf::st_transform(tiger_crs) |>
+      sf::st_filter(management_state) |>
+      pull(NAME)
+    
+    mtfcc_drop <- c("S1710", "S1720", "S1820", "S1830") #walkways, stairways, bike paths, bridle paths, etc - things you can't take a vehicle down
+    
+    tiger_roads_state <- tigris::roads(state, county = counties_state_list, year = 2024) |>
+      filter(! MTFCC %in% mtfcc_drop) |>
+      sf::st_filter(management_state)
+    
+    sf::sf_use_s2(TRUE)
+    
+    tiger_roads_state_5070 <- tiger_roads_state |>
+      sf::st_transform(5070)
+    
+    # FS roads
+    fs_roads_state <- st_read(fs_road_file) |>
+      st_transform(tiger_crs) |>
+      st_filter(geo_state) |>
+      filter(ROUTE_STAT == "EX - EXISTING")
+    
+    fs_roads_state_5070 <- fs_roads_state |>
+      sf::st_transform(5070)
+    
+    # Merge roads
+    print(glue("All roads pulled for {state}; binding and writing")) 
+    
+    geo_state_5070 <- geo_state |>
+      sf::st_transform(5070)
+    
+    roads_all_state <- rbind(fs_roads_state_5070 |> select(geometry),
+                             tiger_roads_state_5070 |> select(geometry)) |>
+      sf::st_intersection(geo_state_5070)
+    
+    flnm <- paste0(state, "_allusfs_roads_5070.gpkg")
+    sf::st_write(roads_all_state, here(dir_roads, flnm))
+    sf::st_write(tiger_roads_state_5070, here(dir_roads, paste0(state, "_tiger_only_roads_5070.gpkg")))
+    sf::st_write(fs_roads_state_5070, here(dir_roads, paste0(state, "_fs_only_roads_5070.gpkg")))
+    
+    return(flnm)
+  } else {
+    return("")
+  }
 }
 
 #road_files <- c("WY") |>

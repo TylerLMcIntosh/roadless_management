@@ -82,8 +82,6 @@ all_results_bound <- all_results |>
   purrr::list_transpose() |>
   purrr::map(dplyr::bind_rows)
 
-view(all_results_bound$state_summary)
-
 all_results_disag <- all_results_bound$state_summary |>
   filter(state != "ID" & state != "CO")
 
@@ -105,7 +103,7 @@ write_csv(all_results_summed, here(dir_derived, "state_perc_treated_results.csv"
 
 twig_points_with_management <- all_results_bound$point_data |>
   dplyr::rename(ST_NAME = NAME)
-sf::st_write(twig_points_with_management, here(dir_derived, "twig_points_management_added.gpkg"))
+sf::st_write(twig_points_with_management, here(dir_derived, "twig_points_management_added_5070.gpkg"))
 
 
 
