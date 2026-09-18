@@ -224,12 +224,24 @@ pull_relevant_state_roads <- function(state) {
   }
 }
 
-road_files <- c("WY") |>
-#road_files <- states$STUSPS |>
+# operate
+# road_files <- c("WY") |>
+# #road_files <- states$STUSPS |>
+#   purrr::set_names() |>
+#   purrr::map(.f = pull_relevant_state_roads)
+
+future::plan(future::multisession, workers = 16)
+
+road_files <- states$STUSPS |>
   purrr::set_names() |>
-  purrr::map(.f = pull_relevant_state_roads)
+  furrr::future_map(
+    .f = pull_relevant_state_roads,
+    .options = furrr::furrr_options(
+      packages = c("sf", "dplyr", "tigris", "here", "glue")
+    )
+  )
 
-
+future::plan(future::sequential)
 
 
 
