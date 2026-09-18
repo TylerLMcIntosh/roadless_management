@@ -37,39 +37,48 @@ roadless_analysis_1 <- function(state) {
   management_state <- management_national |>
     sf::st_intersection(geo_state)
   
-  # area of each management class within the state
-  management_area_state <- management_state |>
-    mutate(area_acres = units::set_units(st_area(geometry), "acres")) |>
-    st_drop_geometry() |>
-    group_by(management) |>
-    summarise(
-      area_acres = sum(area_acres),
-      .groups = "drop"
-    ) |>
-    mutate(state = state,
-           area_acres = units::drop_units(area_acres))
+  if(nrow(management_state) > 0) {
   
-  
-  # spatial join
-  twig_state_centroids_filt_joined <- twig_filt_centroids |>
-    st_filter(geo_state) |>
-    sf::st_join(management_state) |>
-    filter(!is.na(management))
-  
-  # summarize
-  state_summary <- twig_state_centroids_filt_joined |>
-    dplyr::group_by(type, treatment_year, state, management) |>
-    dplyr::summarise(reported_acres = sum(acres, na.rm = TRUE),
-                     reported_cost = sum(total_cost, na.rm = TRUE),
-                     n_trt = n(),
-                     n_trt_w_acres = sum(!is.na(acres)),
-                     n_trt_w_cost = sum(!is.na(total_cost)),
-                     .groups = "drop")
-  
-  # return results
-  return(list("state_summary" = state_summary,
-              "point_data" = twig_state_centroids_filt_joined,
-              "management_area" = management_area_state))
+    # area of each management class within the state
+    management_area_state <- management_state |>
+      mutate(area_acres = units::set_units(st_area(management_state), "acres")) |>
+      st_drop_geometry() |>
+      group_by(management) |>
+      summarise(
+        area_acres = sum(area_acres),
+        .groups = "drop"
+      ) |>
+      mutate(state = state,
+             area_acres = units::drop_units(area_acres))
+    
+    
+    # spatial join
+    twig_state_centroids_filt_joined <- twig_filt_centroids |>
+      st_filter(geo_state) |>
+      sf::st_join(management_state) |>
+      filter(!is.na(management))
+    
+    # summarize
+    state_summary <- twig_state_centroids_filt_joined |>
+      dplyr::group_by(type, treatment_year, state, management) |>
+      dplyr::summarise(reported_acres = sum(acres, na.rm = TRUE),
+                       reported_cost = sum(total_cost, na.rm = TRUE),
+                       n_trt = n(),
+                       n_trt_w_acres = sum(!is.na(acres)),
+                       n_trt_w_cost = sum(!is.na(total_cost)),
+                       .groups = "drop")
+    
+    # return results
+    return(list("state_summary" = state_summary,
+                "point_data" = twig_state_centroids_filt_joined,
+                "management_area" = management_area_state))
+  } else {
+    return(list(
+      state_summary = tibble::tibble(),
+      point_data = twig_filt_centroids[0, ],
+      management_area = tibble::tibble()
+    ))
+  }
 }
 
 
