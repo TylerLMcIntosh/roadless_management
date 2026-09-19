@@ -17,29 +17,34 @@ states <- tigris::states() |>
 
 distances_from_roads <- function(state) {
   
-  geo_state <- states |>
-    dplyr::filter(STUSPS == state)
+  state_roads_fl <- here(dir_roads, paste0(state, "_allusfs_roads_5070.gpkg"))
   
-  twig_filt_centroids_state <- twig_points_with_management |>
-    st_filter(geo_state) 
+  if(file.exists(state_roads_fl)) {
+    
+    roads_all_state <- sf::st_read(state_roads_fl)
+    
+    geo_state <- states |>
+      dplyr::filter(STUSPS == state)
+    
+    twig_filt_centroids_state <- twig_points_with_management |>
+      st_filter(geo_state) 
+    
+    # get nearest feature; keep closest distance
   
-  roads_all_state <- sf::st_read(here(dir_roads, paste0(state, "_allusfs_roads_5070.gpkg")))
+    nearest_idx <- sf::st_nearest_feature(twig_filt_centroids_state, roads_all_state)
+    twig_filt_centroids_state$dist_to_road <- sf::st_distance(twig_filt_centroids_state, roads_all_state[nearest_idx, ], by_element = TRUE)
   
-  # get nearest feature; keep closest distance
-
-  nearest_idx <- sf::st_nearest_feature(twig_filt_centroids_state, roads_all_state)
-  twig_filt_centroids_state$dist_to_road <- sf::st_distance(twig_filt_centroids_state, roads_all_state[nearest_idx, ], by_element = TRUE)
-
-  centroid_distances <- twig_filt_centroids_state |>
-    dplyr::group_by(type, state) |>
-    dplyr::summarize(mean_road_dist = mean(dist_to_road, na.rm = TRUE),
-                     median_road_dist = median(dist_to_road, na.rm = TRUE),
-                     min_road_dist = min(dist_to_road, na.rm = TRUE),
-                     max_road_dist = max(dist_to_road, na.rm = TRUE),
-                     n_trt = n())
-  
-  return(list("distance_summary" = centroid_distances,
-              "centroid_data" = twig_filt_centroids_state))
+    centroid_distances <- twig_filt_centroids_state |>
+      dplyr::group_by(type, state) |>
+      dplyr::summarize(mean_road_dist = mean(dist_to_road, na.rm = TRUE),
+                       median_road_dist = median(dist_to_road, na.rm = TRUE),
+                       min_road_dist = min(dist_to_road, na.rm = TRUE),
+                       max_road_dist = max(dist_to_road, na.rm = TRUE),
+                       n_trt = n())
+    
+    return(list("distance_summary" = centroid_distances,
+                "centroid_data" = twig_filt_centroids_state))
+  }
 }
 
 
