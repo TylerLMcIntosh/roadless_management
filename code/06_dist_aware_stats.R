@@ -5,6 +5,8 @@ library(tidyverse)
 library(here)
 library(mapview)
 library(glue)
+library(future)
+library(furrr)
 
 dir_dats <- here("data/raw")
 dir_derived <- here("data/derived")
@@ -58,15 +60,19 @@ get_buffered_areas <- function(state) {
       filter(.data$state == .env$state) |>
       pull(median_dist) # use median distance for first run
     
-    stopifnot(length(dist_to_use) == 1)
+    stopifnot(
+      length(dist_to_use) == 1,
+      !is.na(dist_to_use)
+    )
     
     roads_all_state <- sf::st_read(state_roads_fl) |>
-      sf::st_union
+      sf::st_union()
     
     geo_state <- states |>
       dplyr::filter(.data$STUSPS == .env$state)
     
     state_mgmt <- management_national |>
+      sf::st_filter(geo_state) |>
       sf::st_intersection(geo_state)
     
     roads_buffered <- roads_all_state |>
@@ -138,6 +144,32 @@ get_buffered_areas <- function(state) {
 
 
 
+future::plan(future::multisession, workers = 10)
+
+buffer_results <- top_10_roadless_area_states |>
+  purrr::set_names() |>
+  furrr::future_map(
+    .f = get_buffered_areas,
+    .options = furrr::furrr_options(
+      packages = c(
+        "sf",
+        "dplyr",
+        "tibble",
+        "units",
+        "here"
+      ),
+      seed = TRUE
+    )
+  )
+
+future::plan(future::sequential)
+
+buffer_results_bound <- buffer_results |>
+  purrr::compact() |>
+  dplyr::bind_rows()
+
+write_csv(buffer_results_bound,
+          here(dir_derived, "distance_aware_stats_by_state.csv"))
 
 
 
