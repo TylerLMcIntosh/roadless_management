@@ -372,9 +372,47 @@ ratio_p <- ggplot(ratio_by_state) +
        x = "State",
        y = "Roadless area treated / USFS non-roadless area treated") +
   theme_minimal()
+ratio_p
+# ggsave(filename = here(dir_figs, "top_ten_trt_ratio_plot.png"),
+#        ratio_p)
 
-ggsave(filename = here(dir_figs, "top_ten_trt_ratio_plot.png"),
-       ratio_p)
+overall_ratios <- agg_results |>
+  dplyr::filter(
+    state %in% top_ten_roadless_area_states,
+    management %in% c("roadless", "usfs non-roadless")
+  ) |>
+  dplyr::group_by(management) |>
+  dplyr::summarise(
+    reported_acres = sum(reported_acres, na.rm = TRUE),
+    area_acres = sum(area_acres, na.rm = TRUE),
+    perc_treated = reported_acres / area_acres,
+    .groups = "drop"
+  ) |>
+  dplyr::select(
+    management,
+    reported_acres,
+    perc_treated
+  ) |>
+  tidyr::pivot_wider(
+    names_from = management,
+    values_from = c(reported_acres, perc_treated)
+  ) |>
+  dplyr::summarise(
+    `Normalized by available area` =
+      perc_treated_roadless /
+      `perc_treated_usfs non-roadless`,
+    `Raw treated area` =
+      reported_acres_roadless /
+      `reported_acres_usfs non-roadless`
+  ) |>
+  tidyr::pivot_longer(
+    cols = dplyr::everything(),
+    names_to = "ratio_type",
+    values_to = "ratio"
+  ) |>
+  dplyr::mutate(
+    label = paste0("Overall = ", round(ratio, 2))
+  )
 
 
 ratio_compare_by_state <- agg_results |>
@@ -427,14 +465,14 @@ ratio_compare_by_state <- agg_results |>
   )
 
 ratio_compare_p <- ggplot(
-  ratio_compare_by_state,
-  aes(
-    x = state,
-    y = ratio,
-    fill = ratio_type
-  )
 ) +
   geom_col(
+    ratio_compare_by_state,
+    aes(
+      x = state,
+      y = ratio,
+      fill = ratio_type
+    ),
     position = position_dodge(width = 0.8),
     width = 0.7
   ) +
@@ -449,7 +487,32 @@ ratio_compare_p <- ggplot(
     y = "Roadless / USFS non-roadless",
     fill = NULL
   ) +
-  theme_minimal()
+  theme_minimal() +
+  geom_hline(
+    yintercept = 1,
+    linetype = "dashed"
+  ) +
+  geom_hline(
+    data = overall_ratios,
+    aes(
+      yintercept = ratio,
+      linetype = ratio_type
+    ),
+    linewidth = 0.8
+  ) +
+  geom_text(
+    data = overall_ratios,
+    aes(
+      x = state,
+      y = ratio,
+      label = label
+    ),
+    inherit.aes = FALSE,
+    hjust = 1,
+    vjust = -0.4
+  )
+
+ratio_compare_p
 
 ggsave(
   filename = here(
