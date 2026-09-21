@@ -68,8 +68,8 @@ get_buffered_areas <- function(state) {
       !is.na(dist_to_use)
     )
     
-    roads_all_state <- sf::st_read(state_roads_fl) |>
-      sf::st_union()
+    roads_all_state <- sf::st_read(state_roads_fl)# |>
+      #sf::st_union()
     
     geo_state <- states |>
       dplyr::filter(.data$STUSPS == .env$state)
@@ -83,10 +83,12 @@ get_buffered_areas <- function(state) {
                     nQuadSegs = 4) # use 4 = 16 sides total for circle, reasonable approximation with much faster operation
     
     roadless_buffered <- roads_buffered |>
-      sf::st_intersection(state_mgmt |> filter(management == "roadless"))
+      sf::st_intersection(state_mgmt |> filter(management == "roadless")) |>
+      sf::st_union()
     
     usfsnonroadless_buffered <- roads_buffered |>
-      sf::st_intersection(state_mgmt |> filter(management != "roadless"))
+      sf::st_intersection(state_mgmt |> filter(management != "roadless")) |>
+      sf::st_union()
     
     sf::st_write(roadless_buffered,
                  here(dir_buffers, paste0(state, "_roadless_buffers.gpkg")),
