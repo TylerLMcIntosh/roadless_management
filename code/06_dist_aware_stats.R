@@ -48,8 +48,11 @@ states <- tigris::states() |>
 
 management_national <- sf::st_read(here(dir_derived, "roadless_management_national_simplified_5070.gpkg"))
 
-twig_filt <- sf::st_read(here(dir_derived, "twig_filt_poly_5070.gpkg"))
-
+#twig_filt <- sf::st_read(here(dir_derived, "twig_filt_poly_5070.gpkg")) # read in for each state instead
+twig_filt_fl <- here(
+  dir_derived,
+  "twig_filt_poly_5070.gpkg"
+)
 
 get_buffered_areas <- function(state) {
   state_roads_fl <- here(dir_roads, paste0(state, "_allusfs_roads_5070.gpkg"))
@@ -93,10 +96,25 @@ get_buffered_areas <- function(state) {
                  append = FALSE)
     
     # intersect w/ TWIG
-    state_twig <- twig_filt |>
+    # state_twig <- twig_filt |>
+    #   sf::st_filter(geo_state) |>
+    #   sf::st_union()
+    
+    # read in with wkt
+    twig_filter_wkt <- geo_state |>
+      sf::st_bbox() |>
+      sf::st_as_sfc() |>
+      sf::st_as_text()
+    
+    state_twig <- sf::st_read(
+      twig_filt_fl,
+      wkt_filter = twig_filter_wkt,
+      quiet = TRUE
+    ) |>
       sf::st_filter(geo_state) |>
       sf::st_union()
     
+    #operatef
     roadless_buff_twig <- state_twig |>
       sf::st_intersection(roadless_buffered)
     
