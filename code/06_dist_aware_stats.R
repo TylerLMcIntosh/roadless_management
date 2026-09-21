@@ -81,10 +81,10 @@ get_buffered_areas <- function(state) {
     roads_buffered <- roads_all_state |>
       sf::st_buffer(dist = dist_to_use,
                     nQuadSegs = 4) # use 4 = 16 sides total for circle, reasonable approximation with much faster operation
-  
+    
     roadless_buffered <- roads_buffered |>
       sf::st_intersection(state_mgmt |> filter(management == "roadless"))
-      
+    
     usfsnonroadless_buffered <- roads_buffered |>
       sf::st_intersection(state_mgmt |> filter(management != "roadless"))
     
@@ -161,28 +161,27 @@ get_buffered_areas <- function(state) {
 }
 
 
-# parallelizing over 10 cores jumped RAM usage over 125gb almost instantly... try serialized
 
-#future::plan(future::multisession, workers = 10)
+future::plan(future::multisession, workers = 3)
 
 buffer_results <- top_10_roadless_area_states |>
-  purrr::set_names() |>
-  #furrr::future_map(
-  purrr::map(
-    .f = get_buffered_areas#,
-    # .options = furrr::furrr_options(
-    #   packages = c(
-    #     "sf",
-    #     "dplyr",
-    #     "tibble",
-    #     "units",
-    #     "here"
-    #   ),
-    #   seed = TRUE
-    # )
+  #purrr::set_names() |>
+  furrr::future_map(
+    #purrr::map(
+    .f = get_buffered_areas,
+    .options = furrr::furrr_options(
+      packages = c(
+        "sf",
+        "dplyr",
+        "tibble",
+        "units",
+        "here"
+      ),
+      seed = TRUE
+    )
   )
 
-#future::plan(future::sequential)
+future::plan(future::sequential)
 
 buffer_results_bound <- buffer_results |>
   purrr::compact() |>
