@@ -55,10 +55,12 @@ dist_roads_results <- states$STUSPS |>
 
 
 dist_roads_results_bound <- dist_roads_results |>
+  purrr::compact() |>
   purrr::list_transpose() |>
   purrr::map(dplyr::bind_rows)
 
-distance_summary <- dist_roads_results_bound$distance_summary
+distance_summary <- dist_roads_results_bound$distance_summary |>
+  sf::st_drop_geometry()
 twig_points_with_management_and_distance <- dist_roads_results_bound$centroid_data
 
 write_csv(distance_summary, here(dir_derived, "distance_summary.csv"))
