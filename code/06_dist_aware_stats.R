@@ -162,11 +162,12 @@ get_buffered_areas <- function(state) {
 
 
 
-future::plan(future::multisession, workers = 10)
+#future::plan(future::multisession, workers = 10)
 
 buffer_results <- top_10_roadless_area_states |>
   purrr::set_names() |>
-  furrr::future_map(
+  #furrr::future_map(
+  purrr::map(
     .f = get_buffered_areas,
     .options = furrr::furrr_options(
       packages = c(
@@ -180,7 +181,7 @@ buffer_results <- top_10_roadless_area_states |>
     )
   )
 
-future::plan(future::sequential)
+#future::plan(future::sequential)
 
 buffer_results_bound <- buffer_results |>
   purrr::compact() |>
