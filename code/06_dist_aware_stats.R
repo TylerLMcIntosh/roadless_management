@@ -161,6 +161,7 @@ get_buffered_areas <- function(state) {
 }
 
 
+# parallelizing over 10 cores jumped RAM usage over 125gb almost instantly... try serialized
 
 #future::plan(future::multisession, workers = 10)
 
@@ -168,17 +169,17 @@ buffer_results <- top_10_roadless_area_states |>
   purrr::set_names() |>
   #furrr::future_map(
   purrr::map(
-    .f = get_buffered_areas,
-    .options = furrr::furrr_options(
-      packages = c(
-        "sf",
-        "dplyr",
-        "tibble",
-        "units",
-        "here"
-      ),
-      seed = TRUE
-    )
+    .f = get_buffered_areas#,
+    # .options = furrr::furrr_options(
+    #   packages = c(
+    #     "sf",
+    #     "dplyr",
+    #     "tibble",
+    #     "units",
+    #     "here"
+    #   ),
+    #   seed = TRUE
+    # )
   )
 
 #future::plan(future::sequential)
