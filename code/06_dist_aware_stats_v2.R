@@ -92,7 +92,8 @@ dist_stats <- dist_stats |>
 #   filter(STUSPS %in% top_10_roadless_area_states) |>
 #   sf::st_transform(5070)
 
-land_status <- sf::st_read(here(dir_derived, "roadless_land_status_5070.gpkg"))
+land_status <- sf::st_read(here(dir_derived, "roadless_land_status_5070.gpkg")) |>
+  sf::st_make_valid()
 
 
 #twig_filt <- sf::st_read(here(dir_derived, "twig_filt_poly_5070.gpkg")) # read in for each state instead
@@ -138,8 +139,18 @@ get_buffered_areas <- function(state) {
       !is.na(dist_to_use)
     )
     
+    result_fl <- here(
+      dir_buffers,
+      paste0(state, "_buffer_results.rds")
+    )
+    
+    # Skip completed states
+    if (file.exists(result_fl)) {
+      return(readRDS(result_fl))
+    }
+    
     roads_all_state <- sf::st_read(state_roads_fl)# |>
-      #sf::st_union()
+    #sf::st_union()
     
     # geo_state <- states |>
     #   dplyr::filter(.data$STUSPS == .env$state)
@@ -172,6 +183,7 @@ get_buffered_areas <- function(state) {
     sf::st_write(usfsnonroadless_buffered,
                  here(dir_buffers, paste0(state, "_usfsnonroadless_buffers.gpkg")),
                  append = FALSE)
+    
     
     # intersect w/ TWIG
     # state_twig <- twig_filt |>
@@ -241,40 +253,49 @@ get_buffered_areas <- function(state) {
     
     # deal with forest overlap
     # crop forest raster once for this state
-    forest_state <- terra::rast(forest_raster_fl) |>
-      terra::crop(terra::vect(state_mgmt |> sf::st_union()))
-    
-    # forest area within buffered road areas
-    unexposed_roadless_forest_area <- forest_area_acres(
-      unexposed_roadless_buffered,
-      forest_state
-    )
-    
-    exposed_roadless_forest_area <- forest_area_acres(
-      exposed_roadless_buffered,
-      forest_state
-    )
-    
-    usfsnonroadless_forest_area <- forest_area_acres(
-      usfsnonroadless_buffered,
-      forest_state
-    )
-    
-    # forest area within TWIG treatments intersecting buffered road areas
-    unexposed_roadless_twig_forest_area <- forest_area_acres(
-      unexposed_roadless_buff_twig,
-      forest_state
-    )
-    
-    exposed_roadless_twig_forest_area <- forest_area_acres(
-      exposed_roadless_buff_twig,
-      forest_state
-    )
-    
-    usfsnonroadless_twig_forest_area <- forest_area_acres(
-      usfsnonroadless_buff_twig,
-      forest_state
-    )
+    if(state != "AK") {
+      forest_state <- terra::rast(forest_raster_fl) |>
+        terra::crop(terra::vect(state_mgmt |> sf::st_union()))
+      
+      # forest area within buffered road areas
+      unexposed_roadless_forest_area <- forest_area_acres(
+        unexposed_roadless_buffered,
+        forest_state
+      )
+      
+      exposed_roadless_forest_area <- forest_area_acres(
+        exposed_roadless_buffered,
+        forest_state
+      )
+      
+      usfsnonroadless_forest_area <- forest_area_acres(
+        usfsnonroadless_buffered,
+        forest_state
+      )
+      
+      # forest area within TWIG treatments intersecting buffered road areas
+      unexposed_roadless_twig_forest_area <- forest_area_acres(
+        unexposed_roadless_buff_twig,
+        forest_state
+      )
+      
+      exposed_roadless_twig_forest_area <- forest_area_acres(
+        exposed_roadless_buff_twig,
+        forest_state
+      )
+      
+      usfsnonroadless_twig_forest_area <- forest_area_acres(
+        usfsnonroadless_buff_twig,
+        forest_state
+      )
+    } else {
+      unexposed_roadless_forest_area <- NA
+      exposed_roadless_forest_area <- NA
+      usfsnonroadless_forest_area <- NA
+      unexposed_roadless_twig_forest_area <- NA
+      exposed_roadless_twig_forest_area <- NA
+      usfsnonroadless_twig_forest_area <- NA
+    }
     
     
     # return dats
@@ -290,84 +311,86 @@ get_buffered_areas <- function(state) {
     #   )
     # )
     
-    return(
-      tibble::tibble(
-        state = state,
-        
-        # Total buffered area
-        unexposed_roadless_buffered_area_acres =
-          units::drop_units(unexposed_roadless_area) * 0.000247105,
-        
-        exposed_roadless_buffered_area_acres =
-          units::drop_units(exposed_roadless_area) * 0.000247105,
-        
-        usfsnonroadless_buffered_area_acres =
-          units::drop_units(usfsnonroadless_area) * 0.000247105,
-        
-        # TWIG area within buffers
-        unexposed_roadless_buff_twig_area_acres =
-          units::drop_units(unexposed_roadless_area_twig) * 0.000247105,
-        
-        exposed_roadless_buff_twig_area_acres =
-          units::drop_units(exposed_roadless_area_twig) * 0.000247105,
-        
-        usfsnonroadless_buff_twig_area_acres =
-          units::drop_units(usfsnonroadless_area_twig) * 0.000247105,
-        
-        # Forest area within buffers
-        unexposed_roadless_buffered_forest_area_acres =
-          unexposed_roadless_forest_area,
-        
-        exposed_roadless_buffered_forest_area_acres =
-          exposed_roadless_forest_area,
-        
-        usfsnonroadless_buffered_forest_area_acres =
-          usfsnonroadless_forest_area,
-        
-        # Forest area within TWIG treatments inside buffers
-        unexposed_roadless_buff_twig_forest_area_acres =
-          unexposed_roadless_twig_forest_area,
-        
-        exposed_roadless_buff_twig_forest_area_acres =
-          exposed_roadless_twig_forest_area,
-        
-        usfsnonroadless_buff_twig_forest_area_acres =
-          usfsnonroadless_twig_forest_area,
-        
-        # Corrected TWIG areas
-        unexposed_roadless_buff_twig_area_acres_corrected =
-          unexposed_roadless_buff_twig_area_acres /
-          MEDIAN_TREATMENT_AREA_RATIO,
-        
-        exposed_roadless_buff_twig_area_acres_corrected =
-          exposed_roadless_buff_twig_area_acres /
-          MEDIAN_TREATMENT_AREA_RATIO,
-        
-        usfsnonroadless_buff_twig_area_acres_corrected =
-          usfsnonroadless_buff_twig_area_acres /
-          MEDIAN_TREATMENT_AREA_RATIO,
-        
-        # Corrected forest TWIG areas
-        unexposed_roadless_buff_twig_forest_area_acres_corrected =
-          unexposed_roadless_buff_twig_forest_area_acres /
-          MEDIAN_TREATMENT_AREA_RATIO,
-        
-        exposed_roadless_buff_twig_forest_area_acres_corrected =
-          exposed_roadless_buff_twig_forest_area_acres /
-          MEDIAN_TREATMENT_AREA_RATIO,
-        
-        usfsnonroadless_buff_twig_forest_area_acres_corrected =
-          usfsnonroadless_buff_twig_forest_area_acres /
-          MEDIAN_TREATMENT_AREA_RATIO
-      )
+    results <- tibble::tibble(
+      state = state,
+      
+      # Total buffered area
+      unexposed_roadless_buffered_area_acres =
+        units::drop_units(unexposed_roadless_area) * 0.000247105,
+      
+      exposed_roadless_buffered_area_acres =
+        units::drop_units(exposed_roadless_area) * 0.000247105,
+      
+      usfsnonroadless_buffered_area_acres =
+        units::drop_units(usfsnonroadless_area) * 0.000247105,
+      
+      # TWIG area within buffers
+      unexposed_roadless_buff_twig_area_acres =
+        units::drop_units(unexposed_roadless_area_twig) * 0.000247105,
+      
+      exposed_roadless_buff_twig_area_acres =
+        units::drop_units(exposed_roadless_area_twig) * 0.000247105,
+      
+      usfsnonroadless_buff_twig_area_acres =
+        units::drop_units(usfsnonroadless_area_twig) * 0.000247105,
+      
+      # Forest area within buffers
+      unexposed_roadless_buffered_forest_area_acres =
+        unexposed_roadless_forest_area,
+      
+      exposed_roadless_buffered_forest_area_acres =
+        exposed_roadless_forest_area,
+      
+      usfsnonroadless_buffered_forest_area_acres =
+        usfsnonroadless_forest_area,
+      
+      # Forest area within TWIG treatments inside buffers
+      unexposed_roadless_buff_twig_forest_area_acres =
+        unexposed_roadless_twig_forest_area,
+      
+      exposed_roadless_buff_twig_forest_area_acres =
+        exposed_roadless_twig_forest_area,
+      
+      usfsnonroadless_buff_twig_forest_area_acres =
+        usfsnonroadless_twig_forest_area,
+      
+      # Corrected TWIG areas
+      unexposed_roadless_buff_twig_area_acres_corrected =
+        unexposed_roadless_buff_twig_area_acres /
+        MEDIAN_TREATMENT_AREA_RATIO,
+      
+      exposed_roadless_buff_twig_area_acres_corrected =
+        exposed_roadless_buff_twig_area_acres /
+        MEDIAN_TREATMENT_AREA_RATIO,
+      
+      usfsnonroadless_buff_twig_area_acres_corrected =
+        usfsnonroadless_buff_twig_area_acres /
+        MEDIAN_TREATMENT_AREA_RATIO,
+      
+      # Corrected forest TWIG areas
+      unexposed_roadless_buff_twig_forest_area_acres_corrected =
+        unexposed_roadless_buff_twig_forest_area_acres /
+        MEDIAN_TREATMENT_AREA_RATIO,
+      
+      exposed_roadless_buff_twig_forest_area_acres_corrected =
+        exposed_roadless_buff_twig_forest_area_acres /
+        MEDIAN_TREATMENT_AREA_RATIO,
+      
+      usfsnonroadless_buff_twig_forest_area_acres_corrected =
+        usfsnonroadless_buff_twig_forest_area_acres /
+        MEDIAN_TREATMENT_AREA_RATIO
     )
+    
+    saveRDS(results, result_fl)
+    
+    return(results)
   }
 }
 
 
 tic("Operate on top 10 states")
 
-future::plan(future::multisession, workers = 3)
+future::plan(future::multisession, workers = 5)
 
 buffer_results <- top_10_roadless_area_states |>
   #purrr::set_names() |>
