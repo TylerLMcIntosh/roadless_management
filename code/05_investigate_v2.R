@@ -12,11 +12,11 @@ dir_dats <- here("data/raw")
 dir_derived <- here("data/derived")
 dir_figs <- here("figs")
 
-dats <- sf::st_read(here(dir_derived, "twig_points_management_distance_added_5070.gpkg"))
+dats <- sf::st_read(here(dir_derived, "twig_points_management_distance_added_5070_v2.gpkg"))
 
 
 centroid_distances <- dats |>
-  dplyr::group_by(type, state) |>
+  dplyr::group_by(type, STATE) |>
   dplyr::summarize(mean_road_dist = mean(dist_to_road, na.rm = TRUE),
                    median_road_dist = median(dist_to_road, na.rm = TRUE),
                    min_road_dist = min(dist_to_road, na.rm = TRUE),
@@ -36,7 +36,7 @@ ggplot(dats) +
   coord_cartesian(xlim = c(0, 1000))
 
 ggplot(dats) +
-  geom_density(aes(x = dist_to_road, color = state)) +
+  geom_density(aes(x = dist_to_road, color = STATE)) +
   xlim(xlim = c(0, 1000)) +
   ylim(xlim = c(0, 0.008))
 
@@ -52,7 +52,7 @@ ggplot(dats) +
 
 # By state ggridges
 state_summary <- dats |>
-  dplyr::group_by(state) |>
+  dplyr::group_by(STATE) |>
   dplyr::summarise(
     mean_dist = mean(dist_to_road, na.rm = TRUE),
     median_dist = median(dist_to_road, na.rm = TRUE)
@@ -86,17 +86,17 @@ p_summary <- ggplot(state_summary_long, aes(x = dist, color = stat)) +
   ) +
   theme(legend.position = "top")
 
-p_states <- ggplot(dats, aes(x = dist_to_road, y = state)) +
+p_states <- ggplot(dats, aes(x = dist_to_road, y = state_summary_long)) +
   ggridges::geom_density_ridges(scale = 1.5) +
   geom_point(
     data = state_summary,
-    aes(x = mean_dist, y = state),
+    aes(x = mean_dist, y = STATE),
     color = "red",
     inherit.aes = FALSE
   ) +
   geom_point(
     data = state_summary,
-    aes(x = median_dist, y = state),
+    aes(x = median_dist, y = STATE),
     color = "blue",
     inherit.aes = FALSE
   ) +
@@ -196,16 +196,16 @@ write_csv(type_summary |> sf::st_drop_geometry(),
 # summary stats
 agg_results <- read_csv(here(dir_derived, "state_perc_treated_results.csv"))
 
-agg_results <- agg_results |>
-  dplyr::group_by(state) |>
-  dplyr::filter(
-    all(c("roadless", "usfs non-roadless") %in% management)
-  ) |>
-  dplyr::ungroup()
+# agg_results <- agg_results |>
+#   dplyr::group_by(STATE) |>
+#   dplyr::filter(
+#     all(c("roadless", "usfs non-roadless") %in% management)
+#   ) |>
+#   dplyr::ungroup()
 
 area_summary <- dats |>
-  dplyr::filter(state %in% unique(agg_results$state)) |>
-  dplyr::group_by(management) |>
+  dplyr::filter(STATE %in% unique(agg_results$STATE)) |>
+  dplyr::group_by(exposure_group) |>
   dplyr::summarise(reported_acres = sum(acres, na.rm = TRUE),
                    reported_cost = sum(total_cost, na.rm = TRUE),
                    n_trt = n(),
@@ -215,36 +215,36 @@ area_summary <- dats |>
   sf::st_drop_geometry()
 
 man_area <- agg_results |>
-  dplyr::group_by(management) |>
-  dplyr::summarise(area_acres = sum(area_acres))
+  dplyr::group_by(exposure_group) |>
+  dplyr::summarise(MANAGE_AREA_ACRES = sum(MANAGE_AREA_ACRES))
 
 area_summary <- area_summary |>
   left_join(man_area) |>
-  mutate(perc_treated = reported_acres / area_acres * 100,
+  mutate(perc_treated = reported_acres / MANAGE_AREA_ACRES * 100,
          version = "All")
 
 
 ggplot(agg_results) +
-  geom_col(aes(x = state, y = area_acres, fill = management), position = "dodge")
+  geom_col(aes(x = STATE, y = MANAGE_AREA_ACRES, fill = exposure_group), position = "dodge")
 ggsave(filename = here(dir_figs, "management_area_by_state.png"),
        units = "px",
        width = 2500,
        height = 1500)
 
 ggplot(area_summary) +
-  geom_col(aes(x = management, y = perc_treated))
+  geom_col(aes(x = exposure_group, y = perc_treated))
 
 # without AK
 
 man_area_noak <- agg_results |>
-  filter(state != "AK") |>
-  dplyr::group_by(management) |>
-  dplyr::summarise(area_acres = sum(area_acres))
+  filter(STATE != "AK") |>
+  dplyr::group_by(exposure_group) |>
+  dplyr::summarise(MANAGE_AREA_ACRES = sum(MANAGE_AREA_ACRES))
 
 area_summary_noak <- dats |>
-  dplyr::filter(state %in% unique(agg_results$state)) |>
-  dplyr::filter(state != "AK") |>
-  dplyr::group_by(management) |>
+  dplyr::filter(STATE %in% unique(agg_results$STATE)) |>
+  dplyr::filter(STATE != "AK") |>
+  dplyr::group_by(exposure_group) |>
   dplyr::summarise(reported_acres = sum(acres, na.rm = TRUE),
                    reported_cost = sum(total_cost, na.rm = TRUE),
                    n_trt = n(),
@@ -255,7 +255,7 @@ area_summary_noak <- dats |>
 
 area_summary_noak <- area_summary_noak |>
   left_join(man_area_noak) |>
-  mutate(perc_treated = reported_acres / area_acres * 100,
+  mutate(perc_treated = reported_acres / MANAGE_AREA_ACRES * 100,
          version = "No-AK")
 
 
@@ -263,7 +263,7 @@ both_area_summaries <- area_summary |>
   rbind(area_summary_noak)
 
 ggplot(both_area_summaries) +
-  geom_col(aes(x = management, y = perc_treated, fill = version), position = "dodge") +
+  geom_col(aes(x = exposure_group, y = perc_treated, fill = version), position = "dodge") +
   theme_minimal() +
   labs(title = "Area treated as percent of management type total area")
 ggsave(filename = here(dir_figs, "percent_treated_summary.png"),
@@ -275,37 +275,38 @@ ggsave(filename = here(dir_figs, "percent_treated_summary.png"),
 
 
 top_10_roadless_area <- agg_results |>
-  filter(management == "roadless") |>
-  arrange(desc(area_acres)) |>
+  filter(exposure_group == "Exposed roadless") |>
+  arrange(desc(MANAGE_AREA_ACRES)) |>
   slice_head(n = 10)
 
 
 top_10_roadless_area_treated <- agg_results |>
-  filter(management == "roadless") |>
+  filter(exposure_group == "Exposed roadless") |>
   arrange(desc(perc_treated)) |>
   slice_head(n = 10)
+
 
 
 # states as factor
 top_10_roadless_area <- top_10_roadless_area |>
   dplyr::mutate(
-    state = factor(state, levels = unique(state))
+    STATE = factor(STATE, levels = unique(STATE))
   )
 
-top_ten_roadless_area_states <- top_10_roadless_area |> pull(state)
+top_ten_roadless_area_states <- top_10_roadless_area |> pull(STATE)
 
 top_10_roadless_area_treated <- top_10_roadless_area_treated |>
   dplyr::mutate(
-    state = factor(state, levels = unique(state))
+    STATE = factor(STATE, levels = unique(STATE))
   )
 
 
 v1 <- ggplot(top_10_roadless_area) +
   geom_col(
     aes(
-      x = state,
+      x = STATE,
       y = perc_treated,
-      fill = state == "UT"
+      fill = STATE == "UT"
     )
   ) +
   scale_fill_manual(
@@ -313,14 +314,14 @@ v1 <- ggplot(top_10_roadless_area) +
     guide = "none"
   ) +
   theme_minimal() +
-  labs(title = "Percent treated: Top 10 states by total roadless area")
+  labs(title = "Percent treated: Top 10 states by exposed roadless area")
 
 v2 <- ggplot(top_10_roadless_area_treated) +
   geom_col(
     aes(
-      x = state,
+      x = STATE,
       y = perc_treated,
-      fill = state == "UT"
+      fill = STATE == "UT"
     )
   ) +
   scale_fill_manual(
@@ -328,8 +329,9 @@ v2 <- ggplot(top_10_roadless_area_treated) +
     guide = "none"
   ) +
   theme_minimal() +
-  labs(title = "Percent treated: Top 10 states by total roadless area treated",
-       caption = "Top ten's going from left to right")
+  labs(title = "Percent treated: Top 10 states by treated area / exposed roadless area",
+       caption = "Top ten's going from left to right") +
+  coord_cartesian(ylim = c(0, 100))
 
 
 v3 <- v1 / v2
@@ -339,15 +341,76 @@ ggsave(filename = here(dir_figs, "top_ten_plot.png"),
        v3)
 
 
+
+# col by state top ten
+area_summary_tojoin <- area_summary |> rename(STATE = version)
+
+area_summary_joined <- agg_results |> rbind(area_summary_tojoin)
+
+top_ten_col <- area_summary_joined |>
+  dplyr::filter(
+    STATE %in% top_ten_roadless_area_states | STATE == "All"
+  ) |>
+  dplyr::mutate(
+    STATE = factor(
+      STATE,
+      levels = c("All", levels(top_ten_roadless_area_states))
+    ),
+    exposure_group = factor(
+      exposure_group,
+      levels = c(
+        "Non-roadless",
+        "Unexposed roadless",
+        "Exposed roadless"
+      )
+    )
+  ) |>
+  ggplot(
+    aes(
+      x = STATE,
+      y = perc_treated,
+      fill = exposure_group,
+      color = STATE == "All"
+    )
+  ) +
+  geom_col(
+    position = position_dodge(width = 0.9),
+    linewidth = 0.5
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Non-roadless" = "cadetblue4",
+      "Unexposed roadless" = "goldenrod3",
+      "Exposed roadless" = "deeppink3"
+    )
+  ) +
+  scale_color_manual(
+    values = c(
+      `TRUE` = "black",
+      `FALSE` = NA
+    ),
+    guide = "none"
+  ) +
+  theme_minimal() +
+  labs(x = "Top ten states by exposed roadless area",
+       y = "Area treated as percentage of total area",
+       fill = "Exposure group")
+
+top_ten_col
+
+ggsave(top_ten_col, filename = here(dir_figs, "summary_fig_1.png"))
+
+
+
 ratio_by_state <- agg_results |>
   dplyr::filter(
     state %in% top_ten_roadless_area_states,
     management %in% c("roadless", "usfs non-roadless")
   ) |>
-  dplyr::select(state, management, perc_treated, area_acres) |>
+  dplyr::select(state, management, perc_treated, MANAGE_AREA_ACRES) |>
   tidyr::pivot_wider(
     names_from = management,
-    values_from = c(perc_treated, area_acres)
+    values_from = c(perc_treated, MANAGE_AREA_ACRES)
   ) |>
   dplyr::mutate(
     treatment_ratio =
@@ -355,12 +418,12 @@ ratio_by_state <- agg_results |>
   ) |>
   dplyr::transmute(
     state,
-    roadless_area_acres = area_acres_roadless,
+    roadless_MANAGE_AREA_ACRES = MANAGE_AREA_ACRES_roadless,
     roadless_perc_treated = perc_treated_roadless,
     usfs_nonroadless_perc_treated = `perc_treated_usfs non-roadless`,
     treatment_ratio
   ) |>
-  arrange(desc(roadless_area_acres)) |>
+  arrange(desc(roadless_MANAGE_AREA_ACRES)) |>
   dplyr::mutate(
     state = factor(state, levels = unique(state))
   )
@@ -384,8 +447,8 @@ overall_ratios <- agg_results |>
   dplyr::group_by(management) |>
   dplyr::summarise(
     reported_acres = sum(reported_acres, na.rm = TRUE),
-    area_acres = sum(area_acres, na.rm = TRUE),
-    perc_treated = reported_acres / area_acres,
+    MANAGE_AREA_ACRES = sum(MANAGE_AREA_ACRES, na.rm = TRUE),
+    perc_treated = reported_acres / MANAGE_AREA_ACRES,
     .groups = "drop"
   ) |>
   dplyr::select(
@@ -424,14 +487,14 @@ ratio_compare_by_state <- agg_results |>
     state,
     management,
     perc_treated,
-    area_acres,
+    MANAGE_AREA_ACRES,
     reported_acres
   ) |>
   tidyr::pivot_wider(
     names_from = management,
     values_from = c(
       perc_treated,
-      area_acres,
+      MANAGE_AREA_ACRES,
       reported_acres
     )
   ) |>
@@ -443,11 +506,11 @@ ratio_compare_by_state <- agg_results |>
   ) |>
   dplyr::transmute(
     state,
-    roadless_area_acres = area_acres_roadless,
+    roadless_MANAGE_AREA_ACRES = MANAGE_AREA_ACRES_roadless,
     normalized_ratio,
     raw_area_ratio
   ) |>
-  dplyr::arrange(desc(roadless_area_acres)) |>
+  dplyr::arrange(desc(roadless_MANAGE_AREA_ACRES)) |>
   dplyr::mutate(
     state = factor(state, levels = unique(state))
   ) |>
@@ -463,11 +526,9 @@ ratio_compare_by_state <- agg_results |>
       raw_area_ratio = "Raw treated area"
     )
   )
-
-ratio_compare_p <- ggplot(
-) +
+ratio_compare_p <- ggplot() +
   geom_col(
-    ratio_compare_by_state,
+    data = ratio_compare_by_state,
     aes(
       x = state,
       y = ratio,
@@ -476,22 +537,10 @@ ratio_compare_p <- ggplot(
     position = position_dodge(width = 0.8),
     width = 0.7
   ) +
-  geom_hline(
-    yintercept = 1,
-    linetype = "dashed"
-  ) +
-  labs(
-    title = "Roadless/non-roadless treatment ratios",
-    subtitle = "Top ten states by roadless area (left to right)",
-    x = "State",
-    y = "Roadless / USFS non-roadless",
-    fill = NULL
-  ) +
-  theme_minimal() +
-  geom_hline(
-    yintercept = 1,
-    linetype = "dashed"
-  ) +
+  # geom_hline(
+  #   yintercept = 1,
+  #   linetype = "dashed"
+  # ) +
   geom_hline(
     data = overall_ratios,
     aes(
@@ -503,14 +552,25 @@ ratio_compare_p <- ggplot(
   geom_text(
     data = overall_ratios,
     aes(
-      x = state,
+      x = "NM",
       y = ratio,
       label = label
     ),
     inherit.aes = FALSE,
     hjust = 1,
     vjust = -0.4
-  )
+  ) +
+  labs(
+    title = "Roadless/non-roadless treatment ratios",
+    subtitle = "Top ten states by roadless area (left to right)",
+    x = "State",
+    y = "Roadless / USFS non-roadless",
+    fill = NULL,
+    linetype = "Overall ratio",
+    caption = "The y axis value indicates the ratio of treatments occurring in roadless\n areas compared to non-roadless areas.\nFor example, a value of 0.5 indicates that half as much area was treated in\nroadless areas as in non-roadless.\nThe red bars are results normalized by available area of each type"
+  ) +
+  theme_minimal()
+
 
 ratio_compare_p
 
@@ -528,8 +588,8 @@ ggsave(
 trt_area_compare <- dats |>
   select(acres, shape_Area) |>
   sf::st_drop_geometry() |>
-  mutate(shape_area_acres = shape_Area * 0.000247105,
-         ratio = shape_area_acres / acres)
+  mutate(shape_MANAGE_AREA_ACRES = shape_Area * 0.000247105,
+         ratio = shape_MANAGE_AREA_ACRES / acres)
 
 med <- median(trt_area_compare$ratio)
 

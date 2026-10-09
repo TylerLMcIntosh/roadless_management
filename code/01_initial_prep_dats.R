@@ -73,48 +73,58 @@ sf::st_write(twig_filt_centroids, here(dir_derived, "twig_filt_centroids_5070.gp
 
 # Management ----
 
-st_layers(here(dir_dats, "S_USA.RoadCore_FS/S_USA.RoadCore_FS.shp"))
+# THIS CODE NOW DEPRECATED - USE KYLE's DATA INSTEAD, SEE BELOW
+# st_layers(here(dir_dats, "S_USA.RoadCore_FS/S_USA.RoadCore_FS.shp"))
+# 
+# # USFS roads and roadless
+# roadless_path <- here(dir_dats, "S_USA.RoadlessArea_2001/S_USA.RoadlessArea_2001.shp")
+# 
+# roadless_crs <- st_read(
+#   roadless_path) |>
+#   st_crs()
+# 
+# 
+# # USFS all
+# sma_fl <- here(dir_dats, "SMA_WM.gdb")
+# st_layers(sma_fl)
+# sma_crs <- st_read(
+#   here(sma_fl),
+#   query = "SELECT * FROM SurfaceMgtAgy_USFS LIMIT 0"
+# ) |>
+#   st_crs()
+# 
+# usfs <- st_read(
+#   here(sma_fl),
+#   layer = "SurfaceMgtAgy_USFS") |>
+#   st_transform(twig_crs)
+# 
+# 
+# # prep management national data
+# usfs_dissolved <- usfs |> sf::st_union()
+# 
+# roadless_all <- sf::st_read(roadless_path) |>
+#   sf::st_transform(twig_crs) |>
+#   sf::st_union()
+# 
+# usfs_nonroadless_all <- sf::st_difference(usfs_dissolved, roadless_all)
+# 
+# management_national <- rbind(
+#   sf::st_sf(management = "roadless", geometry = roadless_all),
+#   sf::st_sf(management = "usfs non-roadless", geometry = usfs_nonroadless_all)
+# ) |>
+#   sf::st_transform(5070) |>
+#   sf::st_make_valid()
+# 
+# sf::st_write(management_national, here(dir_derived, "roadless_management_national_simplified_5070.gpkg"))
+# 
 
-# USFS roads and roadless
-roadless_path <- here(dir_dats, "S_USA.RoadlessArea_2001/S_USA.RoadlessArea_2001.shp")
+land_status <- sf::st_read(here(dir_dats, "roadless_land_status_shapefile/roadless_land_status.shp"))
 
-roadless_crs <- st_read(
-  roadless_path) |>
-  st_crs()
-
-
-# USFS all
-sma_fl <- here(dir_dats, "SMA_WM.gdb")
-st_layers(sma_fl)
-sma_crs <- st_read(
-  here(sma_fl),
-  query = "SELECT * FROM SurfaceMgtAgy_USFS LIMIT 0"
-) |>
-  st_crs()
-
-usfs <- st_read(
-  here(sma_fl),
-  layer = "SurfaceMgtAgy_USFS") |>
-  st_transform(twig_crs)
+land_status_5070 <- land_status |>
+  dplyr::mutate(exposure_group = case_when(STRATUM == "N" ~ "Non-roadless",
+                                           STRATUM == "R1" | STRATUM == "R1s" | STRATUM == "R2" ~ "Unexposed roadless",
+                                           STRATUM == "R3" ~ "Exposed roadless")) |>
+  sf::st_transform(5070)
 
 
-# prep management national data
-usfs_dissolved <- usfs |> sf::st_union()
-
-roadless_all <- sf::st_read(roadless_path) |>
-  sf::st_transform(twig_crs) |>
-  sf::st_union()
-
-usfs_nonroadless_all <- sf::st_difference(usfs_dissolved, roadless_all)
-
-management_national <- rbind(
-  sf::st_sf(management = "roadless", geometry = roadless_all),
-  sf::st_sf(management = "usfs non-roadless", geometry = usfs_nonroadless_all)
-) |>
-  sf::st_transform(5070) |>
-  sf::st_make_valid()
-
-sf::st_write(management_national, here(dir_derived, "roadless_management_national_simplified_5070.gpkg"))
-
-
-
+sf::st_write(land_status_5070, here(dir_derived, "roadless_land_status_5070.gpkg"), append = FALSE)

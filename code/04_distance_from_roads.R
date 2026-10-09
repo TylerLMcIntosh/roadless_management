@@ -1,3 +1,5 @@
+# add join from old data to new data - see bottom of script
+
 library(tigris)
 library(sf)
 library(tidyverse)
@@ -12,8 +14,8 @@ dir_roads <- here(dir_derived, "roads")
 twig_points_with_management <- st_read(here(dir_derived, "twig_points_management_added_5070.gpkg")) # from script 02
 
 states <- tigris::states() |>
-  st_transform(5070) |>
-  filter(! STUSPS %in% c("CO", "ID")) #remove CO and ID
+  st_transform(5070) #|>
+  #filter(! STUSPS %in% c("CO", "ID")) #remove CO and ID
 
 distances_from_roads <- function(state) {
   
@@ -67,4 +69,15 @@ write_csv(distance_summary, here(dir_derived, "distance_summary.csv"))
 sf::st_write(twig_points_with_management_and_distance, here(dir_derived, "twig_points_management_distance_added_5070.gpkg"))
 
 
+twig_points_with_management_and_distance <- sf::st_read(here(dir_derived, "twig_points_management_distance_added_5070.gpkg"))
+
+# JOIN DISTANCES FROM OLD TO NEW DATA
+new_twig <- here(dir_derived, "twig_points_management_added_5070_v2.gpkg")
+if(file.exists(new_twig)) {
+  new_dats <- sf::st_read(new_twig)
+  new_twig_points_with_management_and_distance <- new_dats |>
+    left_join(twig_points_with_management_and_distance |> select(unique_id, dist_to_road) |> sf::st_drop_geometry())
+  sf::st_write(new_twig_points_with_management_and_distance,
+               here(dir_derived, "twig_points_management_distance_added_5070_v2.gpkg"))
+}
 

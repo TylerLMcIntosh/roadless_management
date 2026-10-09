@@ -1,4 +1,4 @@
-
+# original version
 
 
 library(tigris)
@@ -16,8 +16,6 @@ twig_filt_fl <- here(dir_derived, "twig_filt_poly_5070.gpkg")
 twig_filt_centr_fl <- here(dir_derived, "twig_filt_centroids_5070.gpkg")
 mngmt_natl_fl <- here(dir_derived, "roadless_management_national_simplified_5070.gpkg")
 
-
-# States
 states <- tigris::states() |>
   st_transform(5070) |>
   filter(! STUSPS %in% c("CO", "ID")) #remove CO and ID
@@ -34,12 +32,12 @@ roadless_analysis_1 <- function(state) {
   
   geo_state <- states |>
     filter(STUSPS == state)
-  
+
   management_state <- management_national |>
     sf::st_intersection(geo_state)
   
   if(nrow(management_state) > 0) {
-  
+
     # area of each management class within the state
     management_area_state <- management_state |>
       mutate(area_acres = units::set_units(st_area(management_state), "acres")) |>
@@ -52,7 +50,7 @@ roadless_analysis_1 <- function(state) {
       mutate(state = state,
              area_acres = units::drop_units(area_acres))
     
-    
+
     # spatial join
     twig_state_centroids_filt_joined <- twig_filt_centroids |>
       st_filter(geo_state) |>
