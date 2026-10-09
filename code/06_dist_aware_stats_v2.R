@@ -396,7 +396,7 @@ buffer_results <- top_10_roadless_area_states |>
   #purrr::set_names() |>
   furrr::future_map(
     #purrr::map(
-    .f = get_buffered_areas,
+    .f = purrr::safely(get_buffered_areas),
     .options = furrr::furrr_options(
       packages = c(
         "sf",
